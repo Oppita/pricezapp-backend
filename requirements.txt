@@ -7,3 +7,5 @@ python-jose[cryptography]
 alembic
 databases
 python-multipart
+email-validator
+
