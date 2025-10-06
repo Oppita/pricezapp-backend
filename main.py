@@ -1,72 +1,89 @@
-# ====== PriceZapp Backend - main.py ======
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 from jose import jwt
 from datetime import datetime, timedelta
 
-# ====== Inicialización ======
-app = FastAPI(title="PriceZapp API", version="1.0")
+from db import SessionLocal, engine
+from models import Base, User
+from schemas import UserCreate, UserLogin, Token
 
-# ====== Configuración de CORS ======
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # ⚠️ puedes poner el dominio de tu frontend si lo deseas
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# ================================
+# CONFIGURACIÓN GENERAL
+# ================================
+app = FastAPI(title="PriceZapp Backend", version="2.0")
 
-# ====== Seguridad ======
+# Crear tablas si no existen
+Base.metadata.create_all(bind=engine)
+
+# Seguridad
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 SECRET_KEY = "clave-super-secreta"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-# ====== Base de datos simulada ======
-fake_users_db = {}
+# ================================
+# CORS
+# ================================
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # ✅ luego cámbialo a tu dominio frontend
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# ====== Modelos ======
-class User(BaseModel):
-    name: str
-    email: str
-    password: str
+# ================================
+# DEPENDENCIAS DE DB
+# ================================
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-class LoginData(BaseModel):
-    email: str
-    password: str
+# ================================
+# ENDPOINTS
+# ================================
 
-# ====== Funciones auxiliares ======
-def create_access_token(data: dict, expires_delta: timedelta = None):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-# ====== Endpoints ======
 @app.get("/")
 def root():
     return {"status": "ok", "message": "PriceZapp backend running"}
 
-@app.post("/auth/register")
-def register_user(user: User):
-    if user.email in fake_users_db:
+# --- Registro de usuario ---
+@app.post("/auth/register", response_model=Token)
+def register_user(user: UserCreate, db: Session = Depends(get_db)):
+    existing_user = db.query(User).filter(User.email == user.email).first()
+    if existing_user:
         raise HTTPException(status_code=400, detail="User already exists")
-    hashed_password = pwd_context.hash(user.password)
-    fake_users_db[user.email] = {"name": user.name, "password": hashed_password}
-    return {"message": "User created successfully"}
 
-@app.post("/auth/login")
-def login_user(login: LoginData):
-    user = fake_users_db.get(login.email)
-    if not user or not pwd_context.verify(login.password, user["password"]):
+    hashed_password = pwd_context.hash(user.password)
+    db_user = User(
+        name=user.name,
+        email=user.email,
+        hashed_password=hashed_password,
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    token_data = {"sub": db_user.email, "exp": expire}
+    token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
+
+    return {"access_token": token, "token_type": "bearer"}
+
+# --- Login de usuario ---
+@app.post("/auth/login", response_model=Token)
+def login_user(user: UserLogin, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.email == user.email).first()
+    if not db_user or not pwd_context.verify(user.password, db_user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    access_token = create_access_token({"sub": login.email})
-    return {"access_token": access_token, "token_type": "bearer"}
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    token_data = {"sub": db_user.email, "exp": expire}
+    token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
 
-# ====== Verificación simple ======
-@app.get("/auth/users")
-def list_users():
-    return {"users": list(fake_users_db.keys())}
+    return {"access_token": token, "token_type": "bearer"}
