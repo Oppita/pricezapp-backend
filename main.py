@@ -1,16 +1,18 @@
-from fastapi import FastAPI, HTTPException, Depends
+# ====== PriceZapp Backend - main.py ======
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from passlib.context import CryptContext
+from jose import jwt
 from datetime import datetime, timedelta
-from jose import JWTError, jwt
 
-app = FastAPI()
+# ====== Inicialización ======
+app = FastAPI(title="PriceZapp API", version="1.0")
 
-# ====== CORS ======
+# ====== Configuración de CORS ======
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # ⚠️ puedes restringirlo más adelante
+    allow_origins=["*"],  # ⚠️ puedes poner el dominio de tu frontend si lo deseas
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -22,7 +24,7 @@ SECRET_KEY = "clave-super-secreta"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-# ====== Simulación de base de datos ======
+# ====== Base de datos simulada ======
 fake_users_db = {}
 
 # ====== Modelos ======
@@ -35,8 +37,14 @@ class LoginData(BaseModel):
     email: str
     password: str
 
-# ====== Rutas ======
+# ====== Funciones auxiliares ======
+def create_access_token(data: dict, expires_delta: timedelta = None):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
+# ====== Endpoints ======
 @app.get("/")
 def root():
     return {"status": "ok", "message": "PriceZapp backend running"}
@@ -55,5 +63,10 @@ def login_user(login: LoginData):
     if not user or not pwd_context.verify(login.password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    token = jwt.encode({"sub": login.email}, SECRET_KEY, algorithm=ALGORITHM)
-    return {"access_token": token, "token_type": "bearer"}
+    access_token = create_access_token({"sub": login.email})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+# ====== Verificación simple ======
+@app.get("/auth/users")
+def list_users():
+    return {"users": list(fake_users_db.keys())}
