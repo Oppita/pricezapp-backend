@@ -8,4 +8,4 @@ alembic
 databases
 python-multipart
 email-validator
-
+psycopg2-binary
