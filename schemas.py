@@ -1,3 +1,4 @@
+# schemas.py
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List, Any
 
@@ -14,7 +15,6 @@ class UserOut(BaseModel):
     id: int
     name: str
     email: EmailStr
-
     class Config:
         orm_mode = True
 
@@ -59,3 +59,4 @@ class ShoppingListCreate(BaseModel):
 class AlertCreate(BaseModel):
     product_id: int
     target_price: float
+
