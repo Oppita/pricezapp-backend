@@ -1,31 +1,30 @@
+# main.py
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from db import engine, Base
+from fastapi.middleware.cors import CORSMiddleware
+
+# importar routers
 from routers import auth, products, favorites, lists, alerts
 
-app = FastAPI(title="PriceZapp Backend")
+app = FastAPI(title='PRICEZAPP Backend (Auth Ready)')
 
-# Crear tablas si no existen
+# crear tablas
 Base.metadata.create_all(bind=engine)
 
-# Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Puedes restringir a tu dominio del frontend
+    allow_origins=['*'],  # en producción restringe aquí a tu dominio
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=['*'],
+    allow_headers=['*'],
 )
 
-# Incluir los routers
 app.include_router(auth.router)
 app.include_router(products.router)
 app.include_router(favorites.router)
 app.include_router(lists.router)
 app.include_router(alerts.router)
 
-@app.get("/")
+@app.get('/')
 def root():
-    return {"status": "ok", "message": "PriceZapp backend running"}
-
-
+    return {'message':'PRICEZAPP backend (auth) running'}
