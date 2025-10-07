@@ -1,3 +1,4 @@
+# models.py
 from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, Text, JSON, DateTime
 from sqlalchemy.orm import relationship
 from db import Base
@@ -62,3 +63,4 @@ class Alert(Base):
     target_price = Column(Float, nullable=False)
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
